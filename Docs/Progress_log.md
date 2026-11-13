@@ -13,15 +13,36 @@
 
 ## 10/11/2026:
 1. Moved to a new laptop (RTX 4050, 6 GB), rebuilt the environment, and downloaded the official MaIR code as the baseline.
-2. Made a fixed AID split (3,000 train / 60 val / 900 test, bicubic x4, native 600x600).
+2. Made a fixed split of the AID dataset (aerial images, 30 scene classes such as airport, forest, parking; 600x600 pixels). Each HR image is shrunk 4x with bicubic interpolation to 150x150 (LR); the model learns LR -> HR. Images are drawn per class, so every split has all 30 classes, and the split is fixed (seed 0) so every run uses the same images:
+
+| Split | Images | Per class | Used for |
+|---|---|---|---|
+| Train | 3,000 | 100 | training (random 256x256 HR crops) |
+| Val | 60 | 2 | checked every 1,500 iterations during training to pick the best checkpoint |
+| Test | 900 | 30 | scored once at the end; the final reported number |
+
+   Val is small (60 images), so its PSNR is lower than test's (it happens to contain harder images) and noisier. Compare runs only on the same split.
 
 ## 11/11/2026:
-1. Trained the MaIR baseline (E0, 75k iterations, batch 4): AID test **30.64 dB / 0.8030** vs bicubic 28.71 / 0.7313.
+1. Trained the MaIR baseline (E0, 75k iterations, batch 4, seed 10) and evaluated it on the **AID test set (900 images)**, x4, PSNR/SSIM on the Y (brightness) channel:
+
+| Method | PSNR (dB) | SSIM |
+|---|---|---|
+| Bicubic | 28.71 | 0.7313 |
+| MaIR-S (E0) | **30.64** | **0.8030** |
+
 2. Wrote the window branch: 8x8 windows, 4 centre-out spirals + their reverses, Swin-style shifted windows.
 
 ## 12/11/2026:
-1. Window branch only (E-W, batch 2): AID val **30.25 dB / 0.7990** (E0: 30.32 / 0.8013).
+1. Trained the window branch only (E-W, no stripe branch, batch 2, 75k iterations, seed 10).
 
 ## 13/11/2026:
-1. Stripe + window branch, plain sum (E1, batch 2): AID val **30.27 dB / 0.7998**, only +0.02 dB over window-only (within noise).
-2. Not yet a clean comparison with E0 (batch 2 = half the training crops); next: MaIR at batch 2 as the control.
+1. Trained stripe + window branch fused by a plain sum (E1, batch 2, 75k iterations, seed 10). Results on the **AID val set (60 images)**, best checkpoint, x4, Y channel. E-W and E1 are not scored on the test set yet, so all three runs are compared on val here (E0's 30.32 on val is the same model as its 30.64 on test):
+
+| Run | Branches | Batch | Params | PSNR (dB) | SSIM |
+|---|---|---|---|---|---|
+| E0 | stripe only (MaIR) | 4 | 1.37 M | **30.32** | **0.8013** |
+| E-W | window only | 2 | 1.95 M | 30.25 | 0.7990 |
+| E1 | stripe + window (sum) | 2 | 2.45 M | 30.27 | 0.7998 |
+
+2. E1 is only +0.02 dB over E-W (within noise). Not yet a clean comparison with E0 (batch 2 = half the training crops); next: MaIR at batch 2 as the control.
